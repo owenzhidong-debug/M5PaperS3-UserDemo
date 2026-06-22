@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>M5 Paper S3 Reader Prototype</title>
+  <style>
+    :root { --ink:#172018; --paper:#f7f8f3; --soft:#e6e9e3; --muted:#657065; --line:#b7c0b7; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#e4e8e1; color:var(--ink); font-family:Arial, Helvetica, sans-serif; letter-spacing:0; }
+    .workspace { width:min(1120px, 100%); padding:28px; display:grid; grid-template-columns:1fr 540px; gap:42px; align-items:center; }
+    .copy h1 { font-size:34px; margin:0 0 12px; font-weight:700; }
+    .copy p { font-size:16px; line-height:1.6; max-width:440px; margin:0 0 22px; color:#384238; }
+    .legend { display:grid; gap:10px; font-size:14px; color:#4f5b50; }
+    .legend b { color:var(--ink); }
+    .device { position:relative; width:540px; height:960px; overflow:hidden; border:10px solid #d6dbd4; border-radius:18px; background:var(--paper); box-shadow:0 18px 40px #68716655, inset 0 0 0 2px #98a098; user-select:none; touch-action:manipulation; }
+    .screen { position:absolute; inset:0; background:var(--paper); }
+    .view { position:absolute; inset:0; }
+    .hidden { display:none !important; }
+    .home { display:grid; place-content:center; gap:36px; }
+    .home button { width:300px; height:100px; border:2px solid var(--ink); border-radius:0; background:transparent; color:var(--ink); font-size:28px; font-weight:700; cursor:pointer; }
+    .reader { padding:46px 28px 28px; }
+    .book-name { position:absolute; top:18px; left:28px; font-size:14px; font-weight:700; color:var(--muted); }
+    .page { font-family:Arial, Helvetica, sans-serif; font-size:29px; line-height:1.32; max-width:100%; }
+    .page.large { font-size:34px; }
+    .page.bold { font-family:Arial, Helvetica, sans-serif; font-weight:700; font-size:31px; }
+    .page.loose { line-height:2; }
+    .page.normal { line-height:1.5; }
+    .page.compact { line-height:1.28; }
+    .page p { margin:0 0 18px; }
+    .hot-zones { position:absolute; inset:0; display:grid; grid-template-columns:repeat(3, 1fr); z-index:2; }
+    .hot-zone { background:transparent; border:0; cursor:pointer; }
+    .controls { position:absolute; inset:0; z-index:4; pointer-events:none; }
+    .round { position:absolute; width:84px; height:84px; border:2px solid var(--ink); border-radius:50%; background:var(--paper); color:var(--ink); display:grid; place-items:center; cursor:pointer; pointer-events:auto; font-size:16px; font-weight:700; }
+    .round:hover { background:var(--soft); }
+    .right .close, .right .bookmark, .right .menu, .right .toc { left:442px; }
+    .left .close, .left .bookmark, .left .menu, .left .toc { left:14px; }
+    .close { top:271px; } .bookmark { top:382px; } .menu { top:493px; } .toc { top:604px; }
+    .x-icon { width:30px; height:30px; position:relative; } .x-icon:before,.x-icon:after { content:''; position:absolute; width:2px; height:40px; left:14px; top:-5px; background:var(--ink); transform:rotate(45deg); }.x-icon:after { transform:rotate(-45deg); }
+    .bookmark-icon { width:30px; height:42px; border:2px solid var(--ink); position:relative; }.bookmark-icon:after { content:''; position:absolute; left:6px; bottom:-2px; width:14px; height:14px; background:var(--paper); border-left:2px solid var(--ink); border-top:2px solid var(--ink); transform:rotate(45deg); }
+    .dots { display:grid; gap:5px; }.dots i { width:9px; height:9px; border-radius:50%; background:var(--ink); }
+    .toc-icon { width:42px; height:40px; display:grid; align-content:space-between; }.toc-icon i { display:block; height:2px; margin-left:7px; background:var(--ink); position:relative; }.toc-icon i:before { content:''; position:absolute; left:-7px; top:-3px; width:5px; height:5px; border-radius:50%; background:var(--ink); }
+    /* The five actions open as an inward-facing semicircle around More. */
+    .radial .round { top:auto; }
+    .radial.right .menu { left:442px; top:493px; }.radial.left .menu { left:14px; top:493px; }
+    .right .aa,.left .aa { top:343px; }.right .lay,.left .lay { top:387px; }.right .auto,.left .auto { top:493px; }.right .pg,.left .pg { top:599px; }.right .set,.left .set { top:643px; }
+    .right .aa,.right .set { left:442px; }.right .lay,.right .pg { left:336px; }.right .auto { left:292px; }
+    .left .aa,.left .set { left:14px; }.left .lay,.left .pg { left:120px; }.left .auto { left:164px; }
+    .panel { position:absolute; z-index:8; left:28px; top:325px; width:484px; min-height:420px; border:2px solid var(--ink); background:var(--paper); padding:66px 42px 10px; }
+    .panel-back { position:absolute; left:20px; top:17px; border:0; background:transparent; font-size:36px; line-height:36px; color:var(--ink); cursor:pointer; }
+    .option { width:100%; height:86px; display:flex; align-items:center; justify-content:space-between; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--ink); font-size:20px; text-align:left; cursor:pointer; }
+    .option.selected:after { content:'✓'; font-size:42px; font-weight:700; }
+    .settings-panel,.contents-panel { position:absolute; z-index:8; left:0; bottom:0; width:100%; height:480px; border-top:2px solid var(--ink); background:var(--paper); padding:23px 28px; }
+    .panel-head { height:49px; display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--line); font-size:24px; font-weight:700; }
+    .panel-head small { font-size:14px; font-weight:400; color:var(--muted); padding-top:6px; }
+    .chapter { display:flex; justify-content:space-between; align-items:center; height:60px; border-bottom:1px solid var(--line); background:transparent; border-left:0; border-right:0; border-top:0; width:100%; color:var(--ink); font-size:16px; cursor:pointer; text-align:left; }
+    .chapter span:last-child { color:var(--muted); }
+    .setting { height:56px; border-bottom:1px solid var(--line); padding:7px 2px; font-size:15px; }.setting b { display:block; font-size:16px; }.setting span { color:var(--muted); font-size:13px; }
+    .toast { position:absolute; z-index:12; left:150px; bottom:48px; width:240px; height:64px; display:grid; place-items:center; border:2px solid var(--ink); background:var(--paper); font-size:18px; }
+    .flash { position:absolute; z-index:20; inset:0; background:#fff; opacity:0; pointer-events:none; }.flash.run { animation:flash .45s ease-out; } @keyframes flash { 0%{opacity:1} 100%{opacity:0} }
+    .status { position:absolute; right:28px; top:18px; font-size:12px; color:var(--muted); }
+    @media (max-width:900px) { .workspace { grid-template-columns:1fr; justify-items:center; padding:22px; }.copy { text-align:center; }.copy p { margin-inline:auto; }.legend { text-align:left; }.device { transform-origin:top center; } }
+    @media (max-width:570px) { body { display:block; }.workspace { padding:0; gap:16px; }.copy { padding:20px 20px 0; }.copy h1 { font-size:26px; }.device { width:100vw; height:calc(100vw * 1.77778); max-height:960px; border-radius:0; border-width:6px; }.screen { transform:scale(calc(100vw / 540)); transform-origin:top left; width:540px; height:960px; } }
+  </style>
+</head>
+<body>
+  <main class="workspace">
+    <section class="copy">
+      <h1>M5 Paper S3 阅读器</h1>
+      <p>此原型复刻了目前已烧录到设备中的固件。请先选择持握模式，再通过阅读热区和悬浮按钮进行操作。</p>
+      <div class="legend">
+        <div><b>左侧 / 中间 / 右侧：</b>上一页、操作菜单、下一页。</div>
+        <div><b>双击：</b>模拟全屏强制刷新。</div>
+        <div><b>长按 2 秒：</b>模拟全屏强制刷新。</div>
+        <div><b>Auto、Pg、设置：</b>提供选中状态和界面展示，与当前固件功能范围一致。</div>
+      </div>
+    </section>
+
+    <section class="device" id="device" aria-label="M5 Paper S3 interactive reader">
+      <div class="screen" id="screen">
+        <section class="view home" id="homeView">
+          <button data-hand="right">right hand</button>
+          <button data-hand="left">left hand</button>
+        </section>
+
+        <section class="view reader hidden" id="readerView">
+          <div class="book-name">BOOK.TXT</div><div class="status" id="pageStatus">1 / 3</div>
+          <article class="page compact" id="pageText"></article>
+          <div class="hot-zones" id="hotZones"><button class="hot-zone" data-zone="previous" aria-label="Previous page"></button><button class="hot-zone" data-zone="menu" aria-label="Show controls"></button><button class="hot-zone" data-zone="next" aria-label="Next page"></button></div>
+
+          <div class="controls hidden" id="mainControls">
+            <button class="round close" data-action="close" aria-label="Close"><span class="x-icon"></span></button>
+            <button class="round bookmark" data-action="bookmark" aria-label="Bookmark"><span class="bookmark-icon"></span></button>
+            <button class="round menu" data-action="expand" aria-label="Menu"><span class="dots"><i></i><i></i><i></i></span></button>
+            <button class="round toc" data-action="contents" aria-label="Contents"><span class="toc-icon"><i></i><i></i><i></i></span></button>
+          </div>
+
+          <div class="controls radial hidden" id="radialControls">
+            <button class="round menu" data-action="collapse" aria-label="Collapse menu"><span class="dots"><i></i><i></i><i></i></span></button>
+            <button class="round aa" data-panel="font">Aa</button><button class="round lay" data-panel="layout">Lay</button><button class="round auto" data-panel="auto">Auto</button><button class="round pg" data-panel="page">Pg</button><button class="round set" data-panel="settings">Set</button>
+          </div>
+
+          <section class="panel hidden" id="choicePanel"><button class="panel-back" aria-label="Back">‹</button><div id="choiceOptions"></div></section>
+          <section class="contents-panel hidden" id="contentsPanel"><div class="panel-head"><span>Contents</span><small id="contentsProgress"></small></div><div id="chapters"></div></section>
+          <section class="settings-panel hidden" id="settingsPanel"><div class="panel-head"><span>Reading Settings</span><small>Preview</small></div><div id="settingsList"></div></section>
+        </section>
+        <div class="toast hidden" id="toast"></div><div class="flash" id="flash"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const pages = [
+      `<p>A quiet reader keeps the page clear. Each line is placed with a stable rhythm for long reading.</p><p>Touch the left or right third of the screen to move through the book. The center invokes the controls.</p><p>The menu temporarily rests above the current text without changing the reading structure.</p>`,
+      `<p>Font and spacing selections reflow the pages immediately. The text remains the focus of the reading surface.</p><p>Use Aa to select a type style or Lay to choose compact, normal, or loose spacing.</p><p>Contents provides sample chapters until a source book contains its own table of contents.</p>`,
+      `<p>Double tap the display, or hold the screen for two seconds, to request a full e-ink refresh.</p><p>Close returns to the entry screen and also refreshes the full display.</p><p>This is the final page of the demonstration book.</p>`
+    ];
+    const panels = {
+      font: { options:['Compact Sans','Reader Sans','Large Sans','Bold Display'], selected:1 },
+      layout: { options:['Loose','Normal','Compact'], selected:2 },
+      auto: { options:['5 page/min','10 page/min','15 page/min'], selected:0 },
+      page: { options:['Up / Down','Left / Right','Simulation'], selected:1 }
+    };
+    const settings = [['Reading progress','Show page number'],['Font and spacing','Use current choices'],['Page turn mode','Use Pg setting'],['Auto page turn','Manual start'],['Full refresh','Double tap / long press'],['Bookmarks','Saved locally later'],['Sleep while reading','Keep screen readable']];
+    let pageIndex = 0, hand = 'right', controls = 'hidden', pressTimer, toastTimer;
+    const el = id => document.getElementById(id);
+
+    function drawPage() {
+      const page = el('pageText');
+      page.innerHTML = pages[pageIndex];
+      page.className = `page ${['compact','normal','loose'][panels.layout.selected]}`;
+      if (panels.font.selected === 2) page.classList.add('large');
+      if (panels.font.selected === 3) page.classList.add('bold');
+      el('pageStatus').textContent = `${pageIndex + 1} / ${pages.length}`;
+    }
+    function setHand(next) {
+      hand = next; el('mainControls').classList.remove('right','left'); el('radialControls').classList.remove('right','left');
+      el('mainControls').classList.add(hand); el('radialControls').classList.add(hand);
+    }
+    function hideOverlays() { el('mainControls').classList.add('hidden'); el('radialControls').classList.add('hidden'); el('choicePanel').classList.add('hidden'); el('contentsPanel').classList.add('hidden'); el('settingsPanel').classList.add('hidden'); controls='hidden'; }
+    function showMain() { hideOverlays(); el('mainControls').classList.remove('hidden'); controls='main'; }
+    function showRadial() { hideOverlays(); el('radialControls').classList.remove('hidden'); controls='radial'; }
+    function toast(message) { const node=el('toast'); node.textContent=message; node.classList.remove('hidden'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>node.classList.add('hidden'),1400); }
+    function refresh() { const node=el('flash'); node.classList.remove('run'); void node.offsetWidth; node.classList.add('run'); toast('full refresh'); }
+    function showChoice(type) {
+      const data = panels[type];
+      el('choiceOptions').innerHTML = data.options.map((name,index)=>`<button class="option ${index===data.selected?'selected':''}" data-choice="${type}" data-index="${index}">${name}</button>`).join('');
+      hideOverlays(); el('choicePanel').classList.remove('hidden'); controls='choice';
+    }
+    function showContents() {
+      el('contentsProgress').textContent=`${pageIndex+1}/${pages.length}`;
+      el('chapters').innerHTML=['Chapter 1  Opening','Chapter 2  First Turn','Chapter 3  Deep Reading','Chapter 4  Middle Notes','Chapter 5  Later Pages','Chapter 6  Ending'].map((name,index)=>`<button class="chapter" data-chapter="${index}"><span>${name}</span><span>p.${Math.min(pages.length, Math.floor(index*(pages.length-1)/5)+1)}</span></button>`).join('');
+      hideOverlays(); el('contentsPanel').classList.remove('hidden'); controls='contents';
+    }
+    function showSettings() { el('settingsList').innerHTML=settings.map(([name,value])=>`<div class="setting"><b>${name}</b><span>${value}</span></div>`).join(''); hideOverlays(); el('settingsPanel').classList.remove('hidden'); controls='settings'; }
+    function returnHome() { hideOverlays(); el('readerView').classList.add('hidden'); el('homeView').classList.remove('hidden'); refresh(); }
+
+    document.querySelectorAll('.home button').forEach(button => button.addEventListener('click', () => { setHand(button.dataset.hand); drawPage(); el('homeView').classList.add('hidden'); el('readerView').classList.remove('hidden'); }));
+    el('hotZones').addEventListener('click', event => {
+      const zone=event.target.dataset.zone; if (!zone) return;
+      if (controls === 'choice') return showRadial();
+      if (controls === 'contents' || controls === 'settings') return showMain();
+      if (controls !== 'hidden') { hideOverlays(); return; }
+      if (zone === 'menu') return showMain();
+      if (zone === 'previous') { if (!pageIndex) toast('first page'); else { pageIndex--; drawPage(); } }
+      if (zone === 'next') { if (pageIndex===pages.length-1) toast('last page'); else { pageIndex++; drawPage(); } }
+    });
+    el('mainControls').addEventListener('click', event => { const action=event.target.closest('button')?.dataset.action; if (!action) return; if (action==='close') return returnHome(); if (action==='bookmark') return toast('bookmark'); if (action==='expand') return showRadial(); if (action==='contents') return showContents(); });
+    el('radialControls').addEventListener('click', event => { const button=event.target.closest('button'); if (!button) return; if (button.dataset.action==='collapse') return hideOverlays(); if (button.dataset.panel==='settings') return showSettings(); if (button.dataset.panel) showChoice(button.dataset.panel); });
+    el('choicePanel').addEventListener('click', event => { const button=event.target.closest('[data-choice]'); if (!button) return showRadial(); const type=button.dataset.choice; panels[type].selected=Number(button.dataset.index); if (type==='font'||type==='layout') drawPage(); showChoice(type); });
+    el('choicePanel').querySelector('.panel-back').addEventListener('click', showRadial);
+    el('contentsPanel').addEventListener('click', event => { const button=event.target.closest('[data-chapter]'); if (!button) return; pageIndex=Math.min(pages.length-1,Math.floor(Number(button.dataset.chapter)*(pages.length-1)/5)); drawPage(); hideOverlays(); });
+    el('readerView').addEventListener('dblclick', refresh);
+    el('device').addEventListener('pointerdown', () => { pressTimer=setTimeout(refresh,2000); });
+    ['pointerup','pointerleave','pointercancel'].forEach(type => el('device').addEventListener(type,()=>clearTimeout(pressTimer)));
+    drawPage();
+  </script>
+</body>
+</html>
